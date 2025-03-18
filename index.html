@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PDF书签提取器</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        h1 {
+            font-size: 24px;
+            margin-bottom: 20px;
+        }
+        .file-input-container {
+            margin: 20px 0;
+        }
+        #bookmarkList {
+            margin-top: 20px;
+        }
+        .bookmark-item {
+            border-bottom: 1px solid #eee;
+            padding: 8px 0;
+        }
+        .bookmark-content {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .toggle-btn {
+            width: 24px;
+            height: 24px;
+            border: none;
+            background: none;
+            cursor: pointer;
+            font-size: 16px;
+            padding: 0;
+            color: #666;
+        }
+        .title-text {
+            flex-grow: 1;
+            font-size: 14px;
+            color: #000;
+        }
+        .page-number {
+            color: #666;
+            font-size: 14px;
+            margin-right: 10px;
+            white-space: nowrap;
+        }
+        .export-btn {
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            padding: 4px 12px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            white-space: nowrap;
+        }
+        .export-btn:hover {
+            background-color: #45a049;
+        }
+        #loading {
+            display: none;
+            margin: 10px 0;
+            color: #666;
+        }
+        .file-name {
+            font-size: 14px;
+            color: #666;
+            margin: 10px 0;
+        }
+        .child-container {
+            margin-left: 20px;
+        }
+    </style>
+</head>
+<body>
+    <h1>PDF书签提取器</h1>
+    <div class="file-input-container">
+        <input type="file" id="pdfFile" accept=".pdf">
+    </div>
+    <div id="loading">正在处理中，请稍候...</div>
+    <div id="bookmarkList"></div>
+
+    <script src="app.js"></script>
+</body>
+</html> 
