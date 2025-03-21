@@ -19,44 +19,115 @@ const batchExportContainer = document.querySelector('.batch-export-container');
 const toggleAllBtn = document.getElementById('toggleAllBtn');
 const floatingButtons = document.querySelector('.floating-buttons');
 
+// 重置应用状态
+function resetAppState() {
+    // 清空书签列表
+    bookmarkList.innerHTML = '';
+    // 隐藏书签列表
+    bookmarkList.classList.remove('show');
+    // 显示拖放区域
+    dropZone.classList.remove('hidden');
+    // 隐藏浮动按钮
+    floatingButtons.style.display = 'none';
+    // 重置当前PDF文件
+    currentPdfFile = null;
+    // 重置文件输入
+    fileInput.value = '';
+}
+
 // 处理文件函数
 async function handleFile(file) {
     if (file && file.type === 'application/pdf') {
         try {
             currentPdfFile = file;
-            // 显示文件名
+            
+            // 隐藏拖放区域
+            dropZone.classList.add('hidden');
+            
+            // 创建文件名容器
+            const fileNameContainer = document.createElement('div');
+            fileNameContainer.className = 'file-name-container';
+            fileNameContainer.style.display = 'flex';
+            
+            // 创建文件名显示
             const fileNameDiv = document.createElement('div');
             fileNameDiv.className = 'file-name';
             fileNameDiv.textContent = file.name;
+            
+            // 创建关闭按钮
+            const closeBtn = document.createElement('button');
+            closeBtn.className = 'close-btn';
+            closeBtn.innerHTML = '×';
+            closeBtn.title = '关闭文件';
+            closeBtn.onclick = resetAppState;
+            
+            // 组装文件名显示区域
+            fileNameContainer.appendChild(fileNameDiv);
+            fileNameContainer.appendChild(closeBtn);
+            
+            // 清空并显示书签列表容器
             bookmarkList.innerHTML = '';
-            bookmarkList.appendChild(fileNameDiv);
+            bookmarkList.classList.add('show');
+            bookmarkList.insertBefore(fileNameContainer, bookmarkList.firstChild);
             
             const arrayBuffer = await file.arrayBuffer();
             const pdf = await pdfjsLib.getDocument(arrayBuffer).promise;
             
             // 获取大纲（书签）
             const outline = await pdf.getOutline();
-            if (outline) {
+            if (outline && outline.length > 0) {
+                // 记录原始书签数量
+                const originalBookmarkCount = outline.length;
+                
+                // 检查第一个书签的起始页码并添加首页书签
+                const firstBookmarkPage = await getBookmarkPageNumber(outline[0].dest, pdf);
+                if (firstBookmarkPage > 1) {
+                    // 创建首页书签对象
+                    const homeBookmark = {
+                        title: '封面',
+                        dest: [1], // 指向第一页
+                        items: [] // 没有子项
+                    };
+                    // 将首页书签插入到大纲的开头
+                    outline.unshift(homeBookmark);
+                }
+                
                 await displayBookmarks(outline, pdf.numPages, pdf);
                 // 显示悬浮按钮
                 floatingButtons.style.display = 'flex';
-                // 初始化书签状态
-                initializeBookmarks();
+                // 初始化书签状态，传入原始书签数量
+                initializeBookmarks(originalBookmarkCount);
             } else {
-                bookmarkList.innerHTML = '<p>该PDF文件没有书签。</p>';
+                // 显示无书签提示
+                const noBookmarkDiv = document.createElement('div');
+                noBookmarkDiv.className = 'no-bookmark-message';
+                noBookmarkDiv.style.textAlign = 'center';
+                noBookmarkDiv.style.padding = '20px';
+                noBookmarkDiv.style.color = '#666';
+                noBookmarkDiv.textContent = '该PDF文件没有书签。';
+                bookmarkList.appendChild(noBookmarkDiv);
+                
                 // 隐藏悬浮按钮
                 floatingButtons.style.display = 'none';
             }
         } catch (error) {
             console.error('处理PDF时出错:', error);
-            bookmarkList.innerHTML = '<p>处理PDF时出错，请检查文件是否有效。</p>';
+            // 显示错误提示
+            const errorDiv = document.createElement('div');
+            errorDiv.className = 'error-message';
+            errorDiv.style.textAlign = 'center';
+            errorDiv.style.padding = '20px';
+            errorDiv.style.color = '#ff4444';
+            errorDiv.textContent = '处理PDF时出错，请检查文件是否有效。';
+            bookmarkList.appendChild(errorDiv);
+            
             // 隐藏悬浮按钮
             floatingButtons.style.display = 'none';
         }
     } else {
-        bookmarkList.innerHTML = '<p>请选择有效的PDF文件。</p>';
-        // 隐藏悬浮按钮
-        floatingButtons.style.display = 'none';
+        alert('请选择有效的PDF文件。');
+        // 如果文件无效，不要隐藏拖放区域
+        dropZone.classList.remove('hidden');
     }
 }
 
@@ -181,11 +252,11 @@ async function extractPageText(pageNumber, pdf) {
 // 显示书签
 async function displayBookmarks(outline, totalPages, pdf, level = 0, container = bookmarkList, parentNextBookmark = null) {
     if (level === 0) {
-        // 保持文件名显示
-        const fileNameDiv = container.querySelector('.file-name');
+        // 保持文件名容器
+        const fileNameContainer = container.querySelector('.file-name-container');
         container.innerHTML = '';
-        if (fileNameDiv) {
-            container.appendChild(fileNameDiv);
+        if (fileNameContainer) {
+            container.appendChild(fileNameContainer);
         }
     }
 
@@ -197,13 +268,16 @@ async function displayBookmarks(outline, totalPages, pdf, level = 0, container =
         bookmarkDiv.className = 'bookmark-item';
 
         // 获取当前书签的起始页码
-        const startPageNum = await getBookmarkPageNumber(bookmark.dest, pdf);
+        const startPageNum = bookmark.title === '首页' ? 1 : await getBookmarkPageNumber(bookmark.dest, pdf);
         const startPage = startPageNum && startPageNum <= totalPages ? startPageNum : 1;
 
         // 获取结束页码
         let endPage;
-        
-        if (bookmark.items && bookmark.items.length > 0) {
+        if (bookmark.title === '首页') {
+            // 如果是首页书签，结束页码是下一个书签的起始页码减1
+            const nextBookmarkPage = await getBookmarkPageNumber(nextBookmark.dest, pdf);
+            endPage = nextBookmarkPage - 1;
+        } else if (bookmark.items && bookmark.items.length > 0) {
             // 如果有子书签，使用最后一个子书签的结束页码
             const lastChild = bookmark.items[bookmark.items.length - 1];
             endPage = await getBookmarkEndPage(lastChild, nextBookmark, totalPages, pdf);
@@ -264,35 +338,33 @@ async function displayBookmarks(outline, totalPages, pdf, level = 0, container =
         titleText.textContent = bookmark.title || '无标题';
         titleContainer.appendChild(titleText);
 
-        // 如果是最深层次的书签（没有子书签），添加描述按钮
-        if (!bookmark.items || bookmark.items.length === 0) {
-            const descBtn = document.createElement('button');
-            descBtn.className = 'desc-btn';
-            descBtn.textContent = '描述';
-            titleContainer.appendChild(descBtn);
+        // 为所有书签添加描述按钮
+        const descBtn = document.createElement('button');
+        descBtn.className = 'desc-btn';
+        descBtn.textContent = '描述';
+        titleContainer.appendChild(descBtn);
 
-            // 为描述按钮添加事件监听器
-            descBtn.addEventListener('click', async (e) => {
-                e.stopPropagation(); // 阻止事件冒泡
-                // 移除之前的描述文本（如果存在）
-                const existingDesc = bookmarkDiv.querySelector('.description-text');
-                if (existingDesc) {
-                    existingDesc.remove();
-                    return;
-                }
+        // 为描述按钮添加事件监听器
+        descBtn.addEventListener('click', async (e) => {
+            e.stopPropagation(); // 阻止事件冒泡
+            // 移除之前的描述文本（如果存在）
+            const existingDesc = bookmarkDiv.querySelector('.description-text');
+            if (existingDesc) {
+                existingDesc.remove();
+                return;
+            }
 
-                // 创建描述文本容器
-                const descDiv = document.createElement('div');
-                descDiv.className = 'description-text';
-                descDiv.style.marginLeft = `${level * 20 + 20}px`;
-                descDiv.textContent = '正在提取文本...';
-                bookmarkDiv.appendChild(descDiv);
+            // 创建描述文本容器
+            const descDiv = document.createElement('div');
+            descDiv.className = 'description-text';
+            descDiv.style.marginLeft = `${level * 20 + 20}px`;
+            descDiv.textContent = '正在提取文本...';
+            bookmarkDiv.appendChild(descDiv);
 
-                // 提取并显示文本
-                const text = await extractPageText(startPage, pdf);
-                descDiv.textContent = text;
-            });
-        }
+            // 提取并显示文本
+            const text = await extractPageText(startPage, pdf);
+            descDiv.textContent = text;
+        });
 
         contentDiv.appendChild(titleContainer);
 
@@ -686,12 +758,33 @@ function expandToLevel(targetLevel) {
 }
 
 // 初始化时展开所有层级
-function initializeBookmarks() {
+function initializeBookmarks(originalBookmarkCount) {
     maxLevel = getMaxLevel();
     console.log('初始化最大层级:', maxLevel);
-    // 初始状态设置为全折叠
-    currentLevel = 0;
-    collapseAllLevels();
+    
+    // 检查原始顶层书签数量
+    if (originalBookmarkCount === 1) {
+        // 如果原始只有一个顶层书签，展开第一层
+        currentLevel = 1;
+        expandToLevel(1);
+        
+        // 更新展开/折叠按钮的状态
+        const topLevelItems = bookmarkList.querySelectorAll(':scope > .bookmark-item');
+        topLevelItems.forEach(item => {
+            const toggleBtn = item.querySelector('.toggle-btn');
+            if (toggleBtn) {
+                toggleBtn.textContent = '−';
+            }
+        });
+        
+        // 更新全局展开按钮的状态
+        updateToggleButtonIcon(true);
+        toggleAllBtn.title = '已展开 1 层';
+    } else {
+        // 如果有多个顶层书签，保持折叠状态
+        currentLevel = 0;
+        collapseAllLevels();
+    }
 }
 
 // 处理折叠/展开逻辑

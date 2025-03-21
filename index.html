@@ -250,6 +250,67 @@
             width: 24px;
             height: 24px;
         }
+        /* 文件名显示样式 */
+        .file-name-container {
+            display: none;
+            margin: 20px auto;
+            padding: 15px 20px;
+            border: 2px dashed #ccc;
+            border-radius: 8px;
+            max-width: 800px;
+            position: relative;
+            word-break: break-all;
+        }
+
+        .file-name {
+            font-size: 24px;
+            font-weight: bold;
+            color: #333;
+            margin-right: 50px;
+            line-height: 1.4;
+        }
+
+        .close-btn {
+            position: absolute;
+            right: 15px;
+            top: 50%;
+            transform: translateY(-50%);
+            background: #ff4444;
+            border: none;
+            width: 30px;
+            height: 30px;
+            border-radius: 50%;
+            font-size: 20px;
+            color: white;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.3s ease;
+        }
+
+        .close-btn:hover {
+            background: #ff6666;
+            transform: translateY(-50%) scale(1.1);
+        }
+
+        /* 拖放区域样式 */
+        #dropZone {
+            transition: all 0.3s ease;
+        }
+
+        #dropZone.hidden {
+            display: none;
+        }
+
+        /* 书签列表容器样式 */
+        #bookmarkList {
+            display: none;
+        }
+
+        #bookmarkList.show {
+            display: block;
+        }
     </style>
 </head>
 <body>
