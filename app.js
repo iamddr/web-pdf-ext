@@ -15,6 +15,10 @@ const exportMultipleBtn = document.getElementById('exportMultipleBtn');
 const exportSingleBtn = document.getElementById('exportSingleBtn');
 const batchExportContainer = document.querySelector('.batch-export-container');
 
+// 获取悬浮按钮
+const toggleAllBtn = document.getElementById('toggleAllBtn');
+const floatingButtons = document.querySelector('.floating-buttons');
+
 // 处理文件函数
 async function handleFile(file) {
     if (file && file.type === 'application/pdf') {
@@ -34,23 +38,25 @@ async function handleFile(file) {
             const outline = await pdf.getOutline();
             if (outline) {
                 await displayBookmarks(outline, pdf.numPages, pdf);
-                // 显示批量导出容器
-                batchExportContainer.style.display = 'flex';
+                // 显示悬浮按钮
+                floatingButtons.style.display = 'flex';
+                // 初始化书签状态
+                initializeBookmarks();
             } else {
                 bookmarkList.innerHTML = '<p>该PDF文件没有书签。</p>';
-                // 隐藏批量导出容器
-                batchExportContainer.style.display = 'none';
+                // 隐藏悬浮按钮
+                floatingButtons.style.display = 'none';
             }
         } catch (error) {
             console.error('处理PDF时出错:', error);
             bookmarkList.innerHTML = '<p>处理PDF时出错，请检查文件是否有效。</p>';
-            // 隐藏批量导出容器
-            batchExportContainer.style.display = 'none';
+            // 隐藏悬浮按钮
+            floatingButtons.style.display = 'none';
         }
     } else {
         bookmarkList.innerHTML = '<p>请选择有效的PDF文件。</p>';
-        // 隐藏批量导出容器
-        batchExportContainer.style.display = 'none';
+        // 隐藏悬浮按钮
+        floatingButtons.style.display = 'none';
     }
 }
 
@@ -228,13 +234,13 @@ async function displayBookmarks(outline, totalPages, pdf, level = 0, container =
         if (bookmark.items && bookmark.items.length > 0) {
             const toggleBtn = document.createElement('button');
             toggleBtn.className = 'toggle-btn';
-            toggleBtn.textContent = '−';
+            toggleBtn.textContent = '+'; // 初始状态为折叠
             contentDiv.appendChild(toggleBtn);
 
             // 创建子书签容器
             const childContainer = document.createElement('div');
             childContainer.className = 'child-container';
-            childContainer.style.display = 'block';
+            childContainer.style.display = 'none'; // 初始状态为折叠
             
             // 添加展开/折叠功能
             toggleBtn.onclick = () => {
@@ -318,6 +324,7 @@ async function displayBookmarks(outline, totalPages, pdf, level = 0, container =
         if (bookmark.items && bookmark.items.length > 0) {
             const childContainer = document.createElement('div');
             childContainer.className = 'child-container';
+            childContainer.style.display = 'none'; // 初始状态为折叠
             bookmarkDiv.appendChild(childContainer);
             // 传递下一个书签信息给子书签
             await displayBookmarks(bookmark.items, totalPages, pdf, level + 1, childContainer, nextBookmark);
@@ -391,13 +398,19 @@ toggleBatchBtn.addEventListener('click', () => {
     const bookmarkList = document.getElementById('bookmarkList');
     bookmarkList.classList.toggle('show-checkbox');
     
-    // 更新按钮文字
-    toggleBatchBtn.textContent = bookmarkList.classList.contains('show-checkbox') ? '取消批量' : '批量导出';
-    
-    // 如果退出批量模式，隐藏操作按钮
-    if (!bookmarkList.classList.contains('show-checkbox')) {
-        exportMultipleBtn.classList.remove('show');
-        exportSingleBtn.classList.remove('show');
+    // 更新按钮文字和样式
+    if (bookmarkList.classList.contains('show-checkbox')) {
+        toggleBatchBtn.textContent = '取消批量';
+        toggleBatchBtn.classList.add('active');
+        // 显示导出按钮
+        exportMultipleBtn.style.display = 'flex';
+        exportSingleBtn.style.display = 'flex';
+    } else {
+        toggleBatchBtn.textContent = '批量导出';
+        toggleBatchBtn.classList.remove('active');
+        // 隐藏导出按钮
+        exportMultipleBtn.style.display = 'none';
+        exportSingleBtn.style.display = 'none';
         // 取消所有选中状态
         const checkboxes = bookmarkList.querySelectorAll('.bookmark-checkbox');
         checkboxes.forEach(checkbox => checkbox.checked = false);
@@ -408,10 +421,57 @@ toggleBatchBtn.addEventListener('click', () => {
 document.addEventListener('change', (e) => {
     if (e.target.classList.contains('bookmark-checkbox')) {
         const hasChecked = document.querySelector('.bookmark-checkbox:checked');
-        exportMultipleBtn.classList.toggle('show', hasChecked);
-        exportSingleBtn.classList.toggle('show', hasChecked);
+        
+        // 处理父子书签联动
+        const bookmarkItem = e.target.closest('.bookmark-item');
+        if (bookmarkItem) {
+            // 获取所有子书签的复选框
+            const childCheckboxes = bookmarkItem.querySelectorAll('.child-container .bookmark-checkbox');
+            // 将子书签的选中状态设置为与父书签一致
+            childCheckboxes.forEach(checkbox => {
+                checkbox.checked = e.target.checked;
+            });
+            
+            // 向上查找父书签，更新其状态
+            updateParentCheckboxState(e.target);
+        }
+        
+        // 更新导出按钮显示状态
+        if (hasChecked) {
+            exportMultipleBtn.style.display = 'flex';
+            exportSingleBtn.style.display = 'flex';
+        } else {
+            exportMultipleBtn.style.display = 'none';
+            exportSingleBtn.style.display = 'none';
+        }
     }
 });
+
+// 更新父书签的选中状态
+function updateParentCheckboxState(checkbox) {
+    const currentItem = checkbox.closest('.bookmark-item');
+    const childContainer = currentItem.closest('.child-container');
+    if (!childContainer) return;
+    
+    const parentItem = childContainer.closest('.bookmark-item');
+    if (!parentItem) return;
+    
+    const parentCheckbox = parentItem.querySelector('.bookmark-checkbox');
+    if (!parentCheckbox) return;
+    
+    // 获取同级所有复选框
+    const siblingCheckboxes = childContainer.querySelectorAll(':scope > .bookmark-item > .bookmark-content > .bookmark-checkbox');
+    
+    // 检查是否所有同级复选框都被选中
+    const allChecked = Array.from(siblingCheckboxes).every(cb => cb.checked);
+    const anyChecked = Array.from(siblingCheckboxes).some(cb => cb.checked);
+    
+    // 更新父书签的选中状态
+    parentCheckbox.checked = allChecked;
+    
+    // 继续向上递归更新
+    updateParentCheckboxState(parentCheckbox);
+}
 
 // 导出多个PDF并打包成zip
 exportMultipleBtn.addEventListener('click', async () => {
@@ -537,4 +597,132 @@ exportSingleBtn.addEventListener('click', async () => {
     }
     
     loadingDiv.style.display = 'none';
+});
+
+// 获取所有未折叠的最深层子书签容器
+function getDeepestVisibleContainers() {
+    const allContainers = Array.from(document.querySelectorAll('.child-container'));
+    return allContainers.filter(container => {
+        // 容器必须是可见的
+        if (container.style.display === 'none') return false;
+        
+        // 检查是否有子容器，且子容器都是隐藏的
+        const childContainers = container.querySelectorAll('.child-container');
+        return childContainers.length === 0 || Array.from(childContainers).every(child => child.style.display === 'none');
+    });
+}
+
+// 检查是否所有容器都已折叠
+function areAllContainersCollapsed() {
+    const allContainers = document.querySelectorAll('.child-container');
+    return Array.from(allContainers).every(container => container.style.display === 'none');
+}
+
+// 更新按钮图标
+function updateToggleButtonIcon(isExpanded) {
+    const svg = toggleAllBtn.querySelector('svg');
+    svg.innerHTML = isExpanded ? 
+        '<line x1="7" y1="12" x2="17" y2="12"></line><polyline points="12 7 12 17"></polyline>' : 
+        '<line x1="7" y1="12" x2="17" y2="12"></line>';
+}
+
+// 获取最大层级深度
+function getMaxLevel() {
+    let maxLevel = 0;
+    const processLevel = (element, currentLevel) => {
+        maxLevel = Math.max(maxLevel, currentLevel);
+        const childContainer = element.querySelector('.child-container');
+        if (childContainer) {
+            const children = childContainer.querySelectorAll(':scope > .bookmark-item');
+            children.forEach(child => processLevel(child, currentLevel + 1));
+        }
+    };
+    
+    const topLevelItems = bookmarkList.querySelectorAll(':scope > .bookmark-item');
+    topLevelItems.forEach(item => processLevel(item, 0));
+    return maxLevel;
+}
+
+// 折叠所有层级
+function collapseAllLevels() {
+    const containers = document.querySelectorAll('.child-container');
+    const toggleBtns = document.querySelectorAll('.toggle-btn');
+    
+    containers.forEach(container => {
+        container.style.display = 'none';
+    });
+    
+    toggleBtns.forEach(btn => {
+        btn.textContent = '+';
+    });
+    
+    updateToggleButtonIcon(false);
+}
+
+// 展开到指定层级
+function expandToLevel(targetLevel) {
+    const processLevel = (element, currentLevel) => {
+        const container = element.querySelector('.child-container');
+        const toggleBtn = element.querySelector('.toggle-btn');
+        
+        if (container) {
+            if (currentLevel < targetLevel) {
+                container.style.display = 'block';
+                if (toggleBtn) toggleBtn.textContent = '−';
+                
+                const children = container.querySelectorAll(':scope > .bookmark-item');
+                children.forEach(child => processLevel(child, currentLevel + 1));
+            } else {
+                container.style.display = 'none';
+                if (toggleBtn) toggleBtn.textContent = '+';
+            }
+        }
+    };
+    
+    const topLevelItems = bookmarkList.querySelectorAll(':scope > .bookmark-item');
+    topLevelItems.forEach(item => processLevel(item, 0));
+    
+    updateToggleButtonIcon(targetLevel > 0);
+}
+
+// 初始化时展开所有层级
+function initializeBookmarks() {
+    maxLevel = getMaxLevel();
+    console.log('初始化最大层级:', maxLevel);
+    // 初始状态设置为全折叠
+    currentLevel = 0;
+    collapseAllLevels();
+}
+
+// 处理折叠/展开逻辑
+let currentLevel = 0;
+let maxLevel = 0;
+
+toggleAllBtn.addEventListener('click', () => {
+    console.log('当前层级:', currentLevel, '最大层级:', maxLevel);
+    
+    if (currentLevel === 0) {
+        // 如果当前是折叠状态，展开到第一层
+        currentLevel = 1;
+        expandToLevel(currentLevel);
+    } else if (currentLevel >= maxLevel) {
+        // 如果已经展开到最大层级，全部折叠
+        currentLevel = 0;
+        collapseAllLevels();
+    } else {
+        // 展开下一层
+        currentLevel++;
+        expandToLevel(currentLevel);
+    }
+    
+    console.log('展开到层级:', currentLevel);
+    
+    // 更新按钮提示文本
+    if (currentLevel === 0) {
+        toggleAllBtn.title = '全部折叠';
+    } else if (currentLevel === maxLevel) {
+        toggleAllBtn.title = '已展开全部层级';
+    } else {
+        toggleAllBtn.title = `已展开 ${currentLevel} 层`;
+    }
 }); 
